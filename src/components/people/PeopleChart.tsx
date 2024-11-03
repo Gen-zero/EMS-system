@@ -1,235 +1,337 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import ReactFlow, {
   ReactFlowProvider,
-  Node,
-  Edge,
   Controls,
   Background,
+  useReactFlow,
+  Node,
+  Edge,
+  NodeTypes,
+  XYPosition,
   useNodesState,
   useEdgesState,
-  ConnectionMode,
-  Position,
-  useReactFlow,
-  Panel,
+  Connection,
+  EdgeTypes,
+  Viewport,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { MOCK_DATA } from './data/mockData';
+import { ZoomIn, ZoomOut, Lock, Unlock, Save, RotateCcw, Link, Unlink } from 'lucide-react';
 import CustomNode from './components/CustomNode';
-import { calculateOptimalLayout } from './utils/layoutUtils';
+import CustomEdge from './components/CustomEdge';
+import Modal from '../common/Modal';
+import { createOrgChartData } from './utils/layoutUtils';
 import { saveOrgChartData, loadOrgChartData } from './utils/storageUtils';
-import { Save, RotateCcw } from 'lucide-react';
 
-const nodeTypes = {
+const nodeTypes: NodeTypes = {
   custom: CustomNode,
 };
 
-const createOrgChartData = () => {
-  const nodes: Node[] = [];
-  const edges: Edge[] = [];
-  let nodeId = 1;
-
-  // Add organization node
-  nodes.push({
-    id: '0',
-    type: 'custom',
-    position: { x: 0, y: 0 },
-    data: { 
-      name: MOCK_DATA.organization,
-      role: 'Organization',
-      isOrg: true
-    }
-  });
-
-  // Add founders
-  MOCK_DATA.founders.forEach((founder, index) => {
-    const founderId = nodeId.toString();
-    nodes.push({
-      id: founderId,
-      type: 'custom',
-      position: { x: 0, y: 0 },
-      data: { 
-        name: founder.name,
-        role: founder.role,
-        avatar: founder.avatar,
-        isFounder: true
-      }
-    });
-    edges.push({
-      id: `e0-${founderId}`,
-      source: '0',
-      target: founderId,
-      type: 'smoothstep'
-    });
-    nodeId++;
-  });
-
-  // Add teams and their members
-  MOCK_DATA.teams.forEach((team, teamIndex) => {
-    const managerId = nodeId.toString();
-    
-    // Add manager
-    nodes.push({
-      id: managerId,
-      type: 'custom',
-      position: { x: 0, y: 0 },
-      data: { 
-        name: team.manager.name,
-        role: team.manager.role,
-        avatar: team.manager.avatar,
-        isManager: true
-      }
-    });
-
-    // Connect manager to founder
-    edges.push({
-      id: `e${Math.floor(teamIndex / 2) + 1}-${managerId}`,
-      source: (Math.floor(teamIndex / 2) + 1).toString(),
-      target: managerId,
-      type: 'smoothstep'
-    });
-
-    nodeId++;
-
-    // Add team members
-    team.manager.employees?.forEach((employee, empIndex) => {
-      const employeeId = nodeId.toString();
-      nodes.push({
-        id: employeeId,
-        type: 'custom',
-        position: { x: 0, y: 0 },
-        data: { 
-          name: employee.name,
-          role: employee.role,
-          avatar: employee.avatar
-        }
-      });
-      edges.push({
-        id: `e${managerId}-${employeeId}`,
-        source: managerId,
-        target: employeeId,
-        type: 'smoothstep'
-      });
-      nodeId++;
-    });
-  });
-
-  // Apply automatic layout
-  const optimizedNodes = calculateOptimalLayout(nodes, edges);
-  return { nodes: optimizedNodes, edges };
+const edgeTypes: EdgeTypes = {
+  custom: CustomEdge,
 };
 
-function Flow() {
-  const savedData = loadOrgChartData();
-  const defaultData = createOrgChartData();
-  
-  const [nodes, setNodes, onNodesChange] = useNodesState(
-    savedData?.nodes || defaultData.nodes
-  );
-  const [edges, setEdges, onEdgesChange] = useEdgesState(
-    savedData?.edges || defaultData.edges
-  );
-  const [translateExtent, setTranslateExtent] = useState([[0, 0], [0, 0]]);
-  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | null>(null);
-  const { getNodes } = useReactFlow();
+const DRAG_BOUNDS = 150;
 
-  const calculateExtent = useCallback(() => {
-    const flowNodes = getNodes();
-    if (flowNodes.length === 0) return;
+const Flow = () => {
+  const { fitView, zoomIn, zoomOut, getNode, setViewport, getViewport } = useReactFlow();
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [isLocked, setIsLocked] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [bounds, setBounds] = useState({ minX: -DRAG_BOUNDS, maxX: DRAG_BOUNDS, minY: -DRAG_BOUNDS, maxY: DRAG_BOUNDS });
+  const lastViewportRef = useRef<Viewport | null>(null);
+  
+  // Modal states
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [edgeToDelete, setEdgeToDelete] = useState<Edge | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState<boolean | null>(null);
+
+  // Calculate bounds based on node positions
+  const calculateBounds = useCallback((nodes: Node[]) => {
+    if (nodes.length === 0) return;
 
     let minX = Infinity;
     let maxX = -Infinity;
     let minY = Infinity;
     let maxY = -Infinity;
 
-    flowNodes.forEach(node => {
+    nodes.forEach((node) => {
       minX = Math.min(minX, node.position.x);
-      maxX = Math.max(maxX, node.position.x + 250);
+      maxX = Math.max(maxX, node.position.x);
       minY = Math.min(minY, node.position.y);
-      maxY = Math.max(maxY, node.position.y + 100);
+      maxY = Math.max(maxY, node.position.y);
     });
 
-    const padding = 150;
-    setTranslateExtent([
-      [minX - padding, minY - padding],
-      [maxX + padding, maxY + padding]
-    ]);
-  }, [getNodes]);
-
-  useEffect(() => {
-    setTimeout(calculateExtent, 100);
-  }, [calculateExtent]);
-
-  const handleSave = useCallback(() => {
-    setSaveStatus('saving');
-    const success = saveOrgChartData(nodes, edges);
-    setSaveStatus(success ? 'saved' : null);
-    
-    setTimeout(() => {
-      setSaveStatus(null);
-    }, 2000);
-  }, [nodes, edges]);
-
-  const handleReset = useCallback(() => {
-    const { nodes: resetNodes, edges: resetEdges } = createOrgChartData();
-    setNodes(resetNodes);
-    setEdges(resetEdges);
-    calculateExtent();
-  }, [setNodes, setEdges, calculateExtent]);
-
-  const onInit = useCallback(() => {
-    console.log('Flow initialized');
+    setBounds({
+      minX: minX - DRAG_BOUNDS,
+      maxX: maxX + DRAG_BOUNDS,
+      minY: minY - DRAG_BOUNDS,
+      maxY: maxY + DRAG_BOUNDS,
+    });
   }, []);
 
+  useEffect(() => {
+    const savedLayout = loadOrgChartData();
+    if (savedLayout) {
+      setNodes(savedLayout.nodes);
+      setEdges(savedLayout.edges.map(edge => ({ ...edge, type: 'custom' })));
+      calculateBounds(savedLayout.nodes);
+    } else {
+      const { nodes: initialNodes, edges: initialEdges } = createOrgChartData();
+      setNodes(initialNodes);
+      setEdges(initialEdges.map(edge => ({ ...edge, type: 'custom' })));
+      calculateBounds(initialNodes);
+    }
+  }, [setNodes, setEdges, calculateBounds]);
+
+  useEffect(() => {
+    if (nodes.length > 0) {
+      setTimeout(() => {
+        fitView({ padding: 0.2, duration: 200 });
+      }, 100);
+    }
+  }, []); // Only run once on initial load
+
+  const handleSaveLayout = useCallback(() => {
+    const success = saveOrgChartData(nodes, edges);
+    setSaveSuccess(success);
+    setShowSaveModal(true);
+  }, [nodes, edges]);
+
+  const handleResetLayout = useCallback(() => {
+    const { nodes: resetNodes, edges: resetEdges } = createOrgChartData();
+    setNodes(resetNodes);
+    setEdges(resetEdges.map(edge => ({ ...edge, type: 'custom' })));
+    calculateBounds(resetNodes);
+    fitView({ padding: 0.2, duration: 200 });
+  }, [setNodes, setEdges, calculateBounds, fitView]);
+
+  const onNodeDragStart = useCallback(() => {
+    // Store the current viewport when starting to drag
+    lastViewportRef.current = getViewport();
+  }, [getViewport]);
+
+  const onNodeDrag = useCallback(() => {
+    // Restore the viewport during drag to prevent auto-centering
+    if (lastViewportRef.current) {
+      setViewport(lastViewportRef.current);
+    }
+  }, [setViewport]);
+
+  const onNodeDragStop = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      const updatedNode = getNode(node.id);
+      if (!updatedNode) return;
+
+      const newPos: XYPosition = {
+        x: Math.max(bounds.minX, Math.min(bounds.maxX, updatedNode.position.x)),
+        y: Math.max(bounds.minY, Math.min(bounds.maxY, updatedNode.position.y)),
+      };
+
+      setNodes((nds) =>
+        nds.map((n) => {
+          if (n.id === node.id) {
+            return {
+              ...n,
+              position: newPos,
+            };
+          }
+          return n;
+        })
+      );
+
+      // Clear the stored viewport
+      lastViewportRef.current = null;
+    },
+    [bounds, getNode, setNodes]
+  );
+
+  const onConnect = useCallback(
+    (params: Connection) => {
+      if (params.source === params.target) return;
+
+      const connectionExists = edges.some(
+        edge => edge.source === params.source && edge.target === params.target
+      );
+
+      if (!connectionExists) {
+        setEdges((eds) => eds.concat({ 
+          ...params, 
+          id: `e${params.source}-${params.target}`,
+          type: 'custom'
+        }));
+      }
+    },
+    [edges, setEdges]
+  );
+
+  const onEdgeClick = useCallback(
+    (event: React.MouseEvent, edge: Edge) => {
+      setEdgeToDelete(edge);
+      setShowDeleteModal(true);
+    },
+    []
+  );
+
+  const handleDeleteEdge = useCallback(() => {
+    if (edgeToDelete) {
+      setEdges((eds) => eds.filter((e) => e.id !== edgeToDelete.id));
+      setEdgeToDelete(null);
+    }
+    setShowDeleteModal(false);
+  }, [edgeToDelete, setEdges]);
+
   return (
-    <div className="h-full w-full relative">
+    <div ref={containerRef} className="h-full w-full relative">
       <ReactFlow
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onInit={onInit}
+        onNodeDragStart={onNodeDragStart}
+        onNodeDrag={onNodeDrag}
+        onNodeDragStop={onNodeDragStop}
+        onConnect={onConnect}
+        onEdgeClick={onEdgeClick}
         nodeTypes={nodeTypes}
-        connectionMode={ConnectionMode.Strict}
+        edgeTypes={edgeTypes}
         fitView
-        fitViewOptions={{ padding: 0.2 }}
-        translateExtent={translateExtent}
         minZoom={0.5}
         maxZoom={1.5}
-        attributionPosition="bottom-left"
+        preventScrolling
+        nodesDraggable={!isLocked}
+        nodesConnectable={isConnecting}
+        elementsSelectable={!isLocked}
+        proOptions={{ hideAttribution: true }}
       >
         <Background />
-        <Controls>
+        <div className="fixed right-5 top-1/2 -translate-y-1/2 flex flex-col gap-2 bg-white rounded-lg shadow-lg p-2 z-50">
           <button
-            onClick={handleSave}
-            className="react-flow__controls-button"
-            title="Save Layout"
+            onClick={() => zoomIn()}
+            className="p-2 hover:bg-gray-100 rounded-lg"
+            title="Zoom In"
           >
-            <Save className="w-4 h-4" />
-            {saveStatus === 'saved' && (
-              <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 bg-green-500 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
-                Layout saved!
-              </div>
+            <ZoomIn className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => zoomOut()}
+            className="p-2 hover:bg-gray-100 rounded-lg"
+            title="Zoom Out"
+          >
+            <ZoomOut className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setIsLocked(!isLocked)}
+            className="p-2 hover:bg-gray-100 rounded-lg"
+            title={isLocked ? "Unlock Layout" : "Lock Layout"}
+          >
+            {isLocked ? (
+              <Lock className="w-4 h-4" />
+            ) : (
+              <Unlock className="w-4 h-4" />
             )}
           </button>
           <button
-            onClick={handleReset}
-            className="react-flow__controls-button"
+            onClick={() => setIsConnecting(!isConnecting)}
+            className={`p-2 hover:bg-gray-100 rounded-lg ${
+              isConnecting ? 'bg-blue-100' : ''
+            }`}
+            title={isConnecting ? "Stop Connecting" : "Start Connecting"}
+          >
+            {isConnecting ? (
+              <Unlink className="w-4 h-4" />
+            ) : (
+              <Link className="w-4 h-4" />
+            )}
+          </button>
+          <button
+            onClick={handleSaveLayout}
+            className="p-2 hover:bg-gray-100 rounded-lg"
+            title="Save Layout"
+          >
+            <Save className="w-4 h-4" />
+          </button>
+          <button
+            onClick={handleResetLayout}
+            className="p-2 hover:bg-gray-100 rounded-lg"
             title="Reset Layout"
           >
             <RotateCcw className="w-4 h-4" />
           </button>
-        </Controls>
+        </div>
       </ReactFlow>
+
+      {/* Delete Connection Modal */}
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setEdgeToDelete(null);
+        }}
+        title="Delete Connection"
+        actions={
+          <>
+            <button
+              onClick={handleDeleteEdge}
+              className="inline-flex w-full justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              Delete
+            </button>
+            <button
+              onClick={() => {
+                setShowDeleteModal(false);
+                setEdgeToDelete(null);
+              }}
+              className="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              Cancel
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-gray-500">
+          Are you sure you want to delete this connection? This action cannot be undone.
+        </p>
+      </Modal>
+
+      {/* Save Layout Modal */}
+      <Modal
+        isOpen={showSaveModal}
+        onClose={() => {
+          setShowSaveModal(false);
+          setSaveSuccess(null);
+        }}
+        title={saveSuccess ? "Success" : "Error"}
+        actions={
+          <button
+            onClick={() => {
+              setShowSaveModal(false);
+              setSaveSuccess(null);
+            }}
+            className="inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm"
+          >
+            Close
+          </button>
+        }
+      >
+        <p className="text-sm text-gray-500">
+          {saveSuccess
+            ? "Layout saved successfully!"
+            : "Failed to save layout. Please try again."}
+        </p>
+      </Modal>
     </div>
   );
-}
+};
 
 export default function PeopleChart() {
   return (
-    <ReactFlowProvider>
-      <div className="h-full w-full">
+    <div className="h-full w-full">
+      <ReactFlowProvider>
         <Flow />
-      </div>
-    </ReactFlowProvider>
+      </ReactFlowProvider>
+    </div>
   );
 }

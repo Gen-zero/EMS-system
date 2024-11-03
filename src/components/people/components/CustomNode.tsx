@@ -3,57 +3,62 @@ import { Handle, Position } from 'reactflow';
 
 interface CustomNodeProps {
   data: {
-    name: string;
-    role: string;
+    label: string;
+    role?: string;
     avatar?: string;
-    isOrg?: boolean;
-    isFounder?: boolean;
-    isManager?: boolean;
+    type: 'organization' | 'founder' | 'manager' | 'employee';
   };
 }
 
-function CustomNode({ data }: CustomNodeProps) {
+const CustomNode = memo(({ data }: CustomNodeProps) => {
+  const getNodeStyle = () => {
+    switch (data.type) {
+      case 'organization':
+        return 'bg-blue-50 border-blue-200';
+      case 'founder':
+        return 'bg-purple-50 border-purple-200';
+      case 'manager':
+        return 'bg-green-50 border-green-200';
+      case 'employee':
+        return 'bg-gray-50 border-gray-200';
+      default:
+        return 'bg-white border-gray-200';
+    }
+  };
+
   return (
-    <div className={`px-4 py-2 shadow-md rounded-lg border ${
-      data.isOrg ? 'bg-blue-50 border-blue-200' :
-      data.isFounder ? 'bg-purple-50 border-purple-200' :
-      data.isManager ? 'bg-green-50 border-green-200' :
-      'bg-white border-gray-200'
-    }`}>
+    <div className={`px-4 py-2 shadow-md rounded-md border ${getNodeStyle()}`}>
       <Handle
         type="target"
         position={Position.Top}
-        className="!bg-gray-300"
+        className="w-2 h-2 !bg-gray-400"
       />
       
       <div className="flex items-center">
         {data.avatar && (
           <img
             src={data.avatar}
-            alt={data.name}
+            alt={data.label}
             className="w-10 h-10 rounded-full mr-2 object-cover"
           />
         )}
         <div>
-          <div className={`font-bold ${
-            data.isOrg ? 'text-blue-700' :
-            data.isFounder ? 'text-purple-700' :
-            data.isManager ? 'text-green-700' :
-            'text-gray-700'
-          }`}>
-            {data.name}
-          </div>
-          <div className="text-gray-500 text-sm">{data.role}</div>
+          <div className="text-sm font-bold">{data.label}</div>
+          {data.role && (
+            <div className="text-xs text-gray-500">{data.role}</div>
+          )}
         </div>
       </div>
 
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!bg-gray-300"
+        className="w-2 h-2 !bg-gray-400"
       />
     </div>
   );
-}
+});
 
-export default memo(CustomNode);
+CustomNode.displayName = 'CustomNode';
+
+export default CustomNode;

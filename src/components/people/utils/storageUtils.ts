@@ -1,47 +1,24 @@
 import { Node, Edge } from 'reactflow';
 
-const STORAGE_KEY = 'org_chart_data';
+const STORAGE_KEY = 'org-chart-layout';
 
-interface OrgChartData {
-  nodes: Node[];
-  edges: Edge[];
-  lastModified: string;
-}
-
-export function saveOrgChartData(nodes: Node[], edges: Edge[]) {
-  const data: OrgChartData = {
-    nodes,
-    edges,
-    lastModified: new Date().toISOString()
-  };
-  
+export const saveOrgChartData = (nodes: Node[], edges: Edge[]): boolean => {
   try {
+    const data = { nodes, edges };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     return true;
   } catch (error) {
-    console.error('Failed to save org chart data:', error);
+    console.error('Error saving org chart data:', error);
     return false;
   }
-}
+};
 
-export function loadOrgChartData(): OrgChartData | null {
+export const loadOrgChartData = () => {
   try {
-    const savedData = localStorage.getItem(STORAGE_KEY);
-    if (!savedData) return null;
-    
-    return JSON.parse(savedData);
+    const data = localStorage.getItem(STORAGE_KEY);
+    return data ? JSON.parse(data) : null;
   } catch (error) {
-    console.error('Failed to load org chart data:', error);
+    console.error('Error loading org chart data:', error);
     return null;
   }
-}
-
-export function clearSavedOrgChartData() {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-    return true;
-  } catch (error) {
-    console.error('Failed to clear org chart data:', error);
-    return false;
-  }
-}
+};

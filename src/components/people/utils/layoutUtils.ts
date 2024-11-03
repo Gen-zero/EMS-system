@@ -1,111 +1,147 @@
 import { Node, Edge } from 'reactflow';
+import { MOCK_DATA } from '../data/mockData';
 
-interface NodeWithLevel extends Node {
-  level?: number;
-  parentIds?: string[];
+interface Position {
+  x: number;
+  y: number;
 }
 
-const VERTICAL_SPACING = 150;  // Space between levels
-const MIN_NODE_WIDTH = 250;    // Minimum width of a node
-const MIN_HORIZONTAL_SPACING = 30; // Minimum spacing between nodes
+export const calculateOptimalLayout = (nodes: Node[]): Node[] => {
+  const HORIZONTAL_SPACING = 250;
+  const VERTICAL_SPACING = 150;
+  const NODE_WIDTH = 200;
+  const NODE_HEIGHT = 80;
+  const MIN_MARGIN = 30;
 
-export function calculateOptimalLayout(nodes: Node[], edges: Edge[]) {
-  const nodeMap = new Map(nodes.map(node => [node.id, { ...node }]));
-  const childrenMap = new Map<string, string[]>();
-  const parentMap = new Map<string, string[]>();
+  const levels: { [key: string]: Node[] } = {};
 
-  // Build relationship maps
-  edges.forEach(edge => {
-    const { source, target } = edge;
-    if (!childrenMap.has(source)) {
-      childrenMap.set(source, []);
+  // Group nodes by levels (y-position)
+  nodes.forEach(node => {
+    const level = Math.round(node.position.y / VERTICAL_SPACING);
+    if (!levels[level]) {
+      levels[level] = [];
     }
-    if (!parentMap.has(target)) {
-      parentMap.set(target, []);
-    }
-    childrenMap.get(source)?.push(target);
-    parentMap.get(target)?.push(source);
+    levels[level].push(node);
   });
 
-  // Assign levels to nodes (BFS)
-  const assignLevels = () => {
-    const queue: NodeWithLevel[] = [];
-    const rootNode = nodes.find(n => !parentMap.get(n.id)?.length);
-    if (!rootNode) return;
+  // Adjust positions for each level
+  Object.keys(levels).forEach(levelKey => {
+    const levelNodes = levels[levelKey];
+    const level = parseInt(levelKey);
+    const totalWidth = levelNodes.length * (NODE_WIDTH + MIN_MARGIN);
+    let startX = -(totalWidth / 2);
 
-    const processedNodes = new Map<string, NodeWithLevel>();
-    queue.push({ ...rootNode, level: 0 });
-    processedNodes.set(rootNode.id, { ...rootNode, level: 0 });
+    levelNodes.forEach((node, index) => {
+      node.position = {
+        x: startX + index * (NODE_WIDTH + MIN_MARGIN),
+        y: level * VERTICAL_SPACING
+      };
+    });
+  });
 
-    while (queue.length > 0) {
-      const currentNode = queue.shift()!;
-      const children = childrenMap.get(currentNode.id) || [];
+  return nodes;
+};
 
-      children.forEach(childId => {
-        if (!processedNodes.has(childId)) {
-          const childNode = nodeMap.get(childId);
-          if (childNode) {
-            const nodeWithLevel: NodeWithLevel = {
-              ...childNode,
-              level: (currentNode.level || 0) + 1,
-              parentIds: parentMap.get(childId)
-            };
-            queue.push(nodeWithLevel);
-            processedNodes.set(childId, nodeWithLevel);
-          }
-        }
-      });
+export const createOrgChartData = () => {
+  const nodes: Node[] = [];
+  const edges: Edge[] = [];
+  let nodeId = 1;
+
+  // Add organization node
+  nodes.push({
+    id: '0',
+    type: 'custom',
+    position: { x: 0, y: 0 },
+    data: { 
+      label: MOCK_DATA.organization,
+      type: 'organization'
     }
+  });
 
-    return processedNodes;
-  };
-
-  // Calculate optimal positions
-  const calculatePositions = (nodesWithLevels: Map<string, NodeWithLevel>) => {
-    const levelGroups = new Map<number, NodeWithLevel[]>();
+  // Add founder nodes
+  MOCK_DATA.founders.forEach((founder, index) => {
+    const id = nodeId.toString();
+    const xOffset = index === 0 ? -200 : 200;
     
-    // Group nodes by level
-    nodesWithLevels.forEach(node => {
-      const level = node.level || 0;
-      if (!levelGroups.has(level)) {
-        levelGroups.set(level, []);
+    nodes.push({
+      id,
+      type: 'custom',
+      position: { x: xOffset, y: 100 },
+      data: {
+        label: founder.name,
+        role: founder.role,
+        avatar: founder.avatar,
+        type: 'founder'
       }
-      levelGroups.get(level)?.push(node);
     });
 
-    // Calculate positions level by level
-    levelGroups.forEach((levelNodes, level) => {
-      const totalWidth = levelNodes.length * MIN_NODE_WIDTH;
-      const startX = -(totalWidth / 2);
+    edges.push({
+      id: `e0-${id}`,
+      source: '0',
+      target: id,
+      type: 'smoothstep'
+    });
 
-      levelNodes.forEach((node, index) => {
-        const optimalX = startX + (index * (MIN_NODE_WIDTH + MIN_HORIZONTAL_SPACING));
-        const optimalY = level * VERTICAL_SPACING;
+    nodeId++;
+  });
 
-        // Adjust position based on parent positions if not root
-        if (node.parentIds?.length) {
-          const parentX = node.parentIds.reduce((sum, parentId) => {
-            const parent = nodesWithLevels.get(parentId);
-            return sum + (parent?.position.x || 0);
-          }, 0) / node.parentIds.length;
+  // Add team nodes
+  MOCK_DATA.teams.forEach((team, teamIndex) => {
+    const managerId = nodeId.toString();
+    const xOffset = (teamIndex - 1) * 400;
+    
+    // Add manager node
+    nodes.push({
+      id: managerId,
+      type: 'custom',
+      position: { x: xOffset, y: 250 },
+      data: {
+        label: team.manager.name,
+        role: team.manager.role,
+        avatar: team.manager.avatar,
+        type: 'manager'
+      }
+    });
 
-          // Weight between optimal position and parent-based position
-          const weight = 0.3;
-          node.position = {
-            x: (optimalX * (1 - weight)) + (parentX * weight),
-            y: optimalY
-          };
-        } else {
-          node.position = { x: optimalX, y: optimalY };
-        }
+    // Connect to both founders
+    MOCK_DATA.founders.forEach((_, founderIndex) => {
+      edges.push({
+        id: `e${founderIndex + 1}-${managerId}`,
+        source: (founderIndex + 1).toString(),
+        target: managerId,
+        type: 'smoothstep'
       });
     });
 
-    return Array.from(nodesWithLevels.values());
-  };
+    nodeId++;
 
-  const nodesWithLevels = assignLevels();
-  if (!nodesWithLevels) return nodes;
+    // Add employee nodes
+    team.manager.employees?.forEach((employee, empIndex) => {
+      const employeeId = nodeId.toString();
+      const empXOffset = xOffset + (empIndex - 0.5) * 200;
+      
+      nodes.push({
+        id: employeeId,
+        type: 'custom',
+        position: { x: empXOffset, y: 400 },
+        data: {
+          label: employee.name,
+          role: employee.role,
+          avatar: employee.avatar,
+          type: 'employee'
+        }
+      });
 
-  return calculatePositions(nodesWithLevels);
-}
+      edges.push({
+        id: `e${managerId}-${employeeId}`,
+        source: managerId,
+        target: employeeId,
+        type: 'smoothstep'
+      });
+
+      nodeId++;
+    });
+  });
+
+  return { nodes: calculateOptimalLayout(nodes), edges };
+};

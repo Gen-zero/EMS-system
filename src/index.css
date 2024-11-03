@@ -21,20 +21,50 @@
   animation: highlight 1s ease-in-out;
 }
 
-/* React Flow Control Button Styles */
-.react-flow__controls-button {
-  @apply flex items-center justify-center;
-  width: 24px;
-  height: 24px;
-  cursor: pointer;
-  user-select: none;
-  background: #fefefe;
-  border-bottom: 1px solid #eee;
-  box-sizing: content-box;
-  padding: 4px;
-  position: relative;
+/* React Flow Custom Styles */
+.react-flow__panel.right {
+  margin-right: 20px;
 }
 
-.react-flow__controls-button:hover {
-  background: #f4f4f4;
+@keyframes flowDot {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-flow-dot {
+  opacity: 0.6;
+}
+
+/* Enhanced edge interactions */
+.react-flow__edge {
+  pointer-events: all;
+}
+
+.react-flow__edge path {
+  pointer-events: all;
+  cursor: pointer;
+}
+
+.react-flow__edge:hover {
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.1)) drop-shadow(0 1px 1px rgb(0 0 0 / 0.06));
+}
+
+/* Modal Animation */
+@keyframes modalFade {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.modal-enter {
+  animation: modalFade 0.2s ease-out;
 }
