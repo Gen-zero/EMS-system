@@ -2,19 +2,13 @@ import React, { useState } from 'react';
 import { Task } from '../../types';
 import { X, User, Plus } from 'lucide-react';
 import { useCategories } from '../../contexts/CategoryContext';
-import { PROFILE_IMAGES } from '../../constants/images';
+import { taskUsers } from './mockUsers';
 
 interface EditTaskModalProps {
   task: Task;
   onClose: () => void;
   onSubmit: (task: Partial<Task>) => void;
 }
-
-const mockUsers = [
-  { id: 'user1', name: 'ॐ Manu Narayanaya', avatar: PROFILE_IMAGES.USER1 },
-  { id: 'user2', name: 'ॐ Kalidasaya Nama', avatar: PROFILE_IMAGES.USER2 },
-  { id: 'user3', name: 'Admin', avatar: PROFILE_IMAGES.DEFAULT },
-];
 
 const EditTaskModal: React.FC<EditTaskModalProps> = ({
   task,
@@ -33,6 +27,7 @@ const EditTaskModal: React.FC<EditTaskModalProps> = ({
 
   const [newCategory, setNewCategory] = useState('');
   const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,9 +35,7 @@ const EditTaskModal: React.FC<EditTaskModalProps> = ({
   };
 
   const handleChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-    >
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
     setTaskData((prev) => ({ ...prev, [name]: value }));
@@ -70,6 +63,11 @@ const EditTaskModal: React.FC<EditTaskModalProps> = ({
       };
     });
   };
+
+  const filteredUsers = taskUsers.filter(user => 
+    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.role.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const handleAddCategory = (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,8 +125,15 @@ const EditTaskModal: React.FC<EditTaskModalProps> = ({
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Assign To:
                 </label>
-                <div className="grid grid-cols-1 gap-2">
-                  {mockUsers.map((user) => (
+                <input
+                  type="text"
+                  placeholder="Search members..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="mb-2 w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                />
+                <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto">
+                  {filteredUsers.map((user) => (
                     <button
                       key={user.id}
                       type="button"
@@ -148,9 +153,12 @@ const EditTaskModal: React.FC<EditTaskModalProps> = ({
                         alt={user.name}
                         className="h-8 w-8 rounded-full object-cover"
                       />
-                      <span className="flex-1 text-left text-sm font-medium text-gray-900">
-                        {user.name}
-                      </span>
+                      <div className="flex-1 text-left">
+                        <span className="text-sm font-medium text-gray-900">
+                          {user.name}
+                        </span>
+                        <p className="text-xs text-gray-500">{user.role}</p>
+                      </div>
                       {taskData.assignees?.includes(user.id) && (
                         <span className="text-blue-600">
                           <User className="h-5 w-5" />

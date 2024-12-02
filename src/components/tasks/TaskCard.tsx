@@ -1,27 +1,22 @@
 import React, { useState } from 'react';
 import { Task } from '../../types';
-import { Clock, AlertCircle, CheckCircle, MoreVertical, Calendar, Pencil, Trash2, History } from 'lucide-react';
+import { Clock, AlertCircle, CheckCircle, MoreVertical, Calendar, Pencil, Trash2, History, DollarSign, MessageCircle } from 'lucide-react';
 import EditTaskModal from './EditTaskModal';
 import ActivityModal from './ActivityModal';
+import CommentsModal from './CommentsModal';
 import { formatDate } from '../../utils/dateUtils';
 import { MOCK_USERS } from '../../constants/images';
 
 interface TaskCardProps {
   task: Task;
   onEdit: (taskId: string, updatedTask: Partial<Task>) => void;
-  onDelete: (taskId: string) => void;
+  onDelete: (task: Task) => void;
 }
 
 const priorityColors = {
   low: 'bg-green-100 text-green-800',
   medium: 'bg-yellow-100 text-yellow-800',
   high: 'bg-red-100 text-red-800'
-};
-
-const statusIcons = {
-  pending: AlertCircle,
-  in_progress: Clock,
-  completed: CheckCircle
 };
 
 const categoryColors = {
@@ -31,19 +26,29 @@ const categoryColors = {
   marketing: 'bg-indigo-100 text-indigo-800',
   hr: 'bg-orange-100 text-orange-800',
   finance: 'bg-green-100 text-green-800',
-  support: 'bg-teal-100 text-teal-800'
+  support: 'bg-teal-100 text-teal-800',
+  blockchain: 'bg-violet-100 text-violet-800',
+  content: 'bg-cyan-100 text-cyan-800'
 };
 
-const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete }) => {
+const statusIcons = {
+  pending: AlertCircle,
+  in_progress: Clock,
+  completed: CheckCircle
+};
+
+export default function TaskCard({ task, onEdit, onDelete }: TaskCardProps) {
   const [showActions, setShowActions] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showActivityModal, setShowActivityModal] = useState(false);
+  const [showCommentsModal, setShowCommentsModal] = useState(false);
   const StatusIcon = statusIcons[task.status];
+
+  const commentCount = (task.activities || []).filter(a => a.type === 'comment').length;
 
   const handleEdit = (updatedTask: Partial<Task>) => {
     const changes: string[] = [];
     
-    // Compare and record changes
     if (updatedTask.description !== task.description) {
       changes.push(`description updated`);
     }
@@ -64,7 +69,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete }) => {
       id: `activity-${Date.now()}`,
       taskId: task.id,
       type: 'edit',
-      userId: 'user2', // ॐ Manu Narayanaya's ID
+      userId: 'user2',
       timestamp: new Date().toISOString(),
       newValue: changes.join(', ')
     };
@@ -82,7 +87,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete }) => {
       id: `activity-${Date.now()}`,
       taskId: task.id,
       type: 'status_change',
-      userId: 'user2', // ॐ Manu Narayanaya's ID
+      userId: 'user2',
       timestamp: new Date().toISOString(),
       oldValue: task.status,
       newValue: newStatus
@@ -94,9 +99,45 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete }) => {
     });
   };
 
+  const handleAddComment = (comment: string) => {
+    const newActivity = {
+      id: `activity-${Date.now()}`,
+      taskId: task.id,
+      type: 'comment',
+      userId: 'user2',
+      timestamp: new Date().toISOString(),
+      newValue: comment
+    };
+
+    onEdit(task.id, {
+      activities: [...(task.activities || []), newActivity]
+    });
+  };
+
+  const handleAddResult = (link: string) => {
+    const newActivity = {
+      id: `activity-${Date.now()}`,
+      taskId: task.id,
+      type: 'result',
+      userId: 'user2',
+      timestamp: new Date().toISOString(),
+      newValue: 'Added result link',
+      resultLink: link
+    };
+
+    onEdit(task.id, {
+      resultLink: link,
+      activities: [...(task.activities || []), newActivity]
+    });
+  };
+
   return (
     <>
-      <div className="rounded-lg bg-white p-6 shadow-sm hover:shadow-md transition-shadow">
+      <div className={`rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow ${
+        'questReward' in task 
+          ? 'bg-gradient-to-r from-purple-500/10 to-indigo-500/10 border border-purple-200'
+          : 'bg-white'
+      }`}>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-3">
             <select
@@ -126,6 +167,16 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete }) => {
                 <div className="py-1" role="menu">
                   <button
                     onClick={() => {
+                      setShowCommentsModal(true);
+                      setShowActions(false);
+                    }}
+                    className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full"
+                  >
+                    <MessageCircle className="h-4 w-4 mr-2" />
+                    Comments
+                  </button>
+                  <button
+                    onClick={() => {
                       setShowActivityModal(true);
                       setShowActions(false);
                     }}
@@ -146,9 +197,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete }) => {
                   </button>
                   <button
                     onClick={() => {
-                      if (window.confirm('Are you sure you want to delete this task?')) {
-                        onDelete(task.id);
-                      }
+                      onDelete(task);
                       setShowActions(false);
                     }}
                     className="flex items-center px-4 py-2 text-sm text-red-700 hover:bg-red-50 w-full"
@@ -169,9 +218,15 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete }) => {
             <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${priorityColors[task.priority]}`}>
               {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
             </span>
-            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${categoryColors[task.category]}`}>
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${categoryColors[task.category] || 'bg-gray-100 text-gray-800'}`}>
               {task.category.charAt(0).toUpperCase() + task.category.slice(1)}
             </span>
+            {task.questReward && (
+              <span className="inline-flex items-center text-sm font-medium text-purple-600">
+                <DollarSign className="h-4 w-4 mr-1" />
+                {task.questReward.amount} {task.questReward.currency}
+              </span>
+            )}
           </div>
           <div className="flex -space-x-2">
             {task.assignees.map((userId) => (
@@ -200,6 +255,13 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete }) => {
                 Due {formatDate(task.dueDate)}
               </span>
             </div>
+            <button
+              onClick={() => setShowCommentsModal(true)}
+              className="flex items-center hover:text-gray-700 transition-colors"
+            >
+              <MessageCircle className="h-4 w-4 text-gray-400 mr-1" />
+              <span>{commentCount} {commentCount === 1 ? 'comment' : 'comments'}</span>
+            </button>
           </div>
         </div>
       </div>
@@ -216,10 +278,19 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete }) => {
         <ActivityModal
           activities={task.activities || []}
           onClose={() => setShowActivityModal(false)}
+          onAddComment={handleAddComment}
+          taskStatus={task.status}
+          onAddResult={handleAddResult}
+        />
+      )}
+
+      {showCommentsModal && (
+        <CommentsModal
+          activities={task.activities || []}
+          onClose={() => setShowCommentsModal(false)}
+          onAddComment={handleAddComment}
         />
       )}
     </>
   );
-};
-
-export default TaskCard;
+}

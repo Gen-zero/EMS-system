@@ -11,11 +11,12 @@ export interface User {
 export interface TaskActivity {
   id: string;
   taskId: string;
-  type: 'status_change' | 'edit' | 'assignee_change';
+  type: 'status_change' | 'edit' | 'assignee_change' | 'comment' | 'result';
   userId: string;
   timestamp: string;
   oldValue?: string;
   newValue: string;
+  resultLink?: string;
 }
 
 export interface Task {
@@ -31,4 +32,9 @@ export interface Task {
   dueDate: string;
   category: 'sales' | 'development' | 'design' | 'marketing' | 'hr' | 'finance' | 'support';
   activities?: TaskActivity[];
+  questReward?: {
+    amount: number;
+    currency: string;
+  };
+  resultLink?: string;
 }

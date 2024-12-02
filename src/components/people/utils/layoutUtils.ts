@@ -71,7 +71,8 @@ export const createOrgChartData = () => {
         label: founder.name,
         role: founder.role,
         avatar: founder.avatar,
-        type: 'founder'
+        type: 'founder',
+        userId: `founder${index + 1}`
       }
     });
 
@@ -99,7 +100,8 @@ export const createOrgChartData = () => {
         label: team.manager.name,
         role: team.manager.role,
         avatar: team.manager.avatar,
-        type: 'manager'
+        type: 'manager',
+        userId: team.manager.id
       }
     });
 
@@ -128,7 +130,8 @@ export const createOrgChartData = () => {
           label: employee.name,
           role: employee.role,
           avatar: employee.avatar,
-          type: 'employee'
+          type: 'employee',
+          userId: employee.id
         }
       });
 

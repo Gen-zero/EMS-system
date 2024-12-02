@@ -1,6 +1,8 @@
 import React from 'react';
-import { Bell, ChevronLeft, ChevronRight, Settings, LogOut } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings, LogOut } from 'lucide-react';
 import { MOCK_USERS } from '../constants/images';
+import { useNavigate } from '../hooks/useNavigate';
+import NotificationBell from './notifications/NotificationBell';
 
 interface HeaderProps {
   onToggleSidebar: () => void;
@@ -10,6 +12,8 @@ interface HeaderProps {
 }
 
 export default function Header({ onToggleSidebar, isSidebarExpanded, showToggle, isSmallScreen }: HeaderProps) {
+  const { navigateTo } = useNavigate();
+
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-4 lg:px-6">
       <div className="flex items-center space-x-4">
@@ -35,14 +39,14 @@ export default function Header({ onToggleSidebar, isSidebarExpanded, showToggle,
       <div className="flex items-center space-x-4">
         {isSmallScreen ? (
           <>
-            <button className="relative p-2 text-gray-600 hover:text-gray-900">
-              <Bell className="h-6 w-6" />
-              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500"></span>
-            </button>
+            <NotificationBell />
             <button className="p-2 text-gray-600 hover:text-gray-900">
               <Settings className="h-6 w-6" />
             </button>
-            <div className="flex items-center">
+            <div 
+              className="flex items-center cursor-pointer"
+              onClick={() => navigateTo('profile')}
+            >
               <img
                 src={MOCK_USERS.user1.avatar}
                 alt="Profile"
@@ -52,11 +56,11 @@ export default function Header({ onToggleSidebar, isSidebarExpanded, showToggle,
           </>
         ) : (
           <>
-            <button className="relative p-2 text-gray-600 hover:text-gray-900">
-              <Bell className="h-6 w-6" />
-              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500"></span>
-            </button>
-            <div className="flex items-center space-x-3">
+            <NotificationBell />
+            <div 
+              className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 rounded-full px-3 py-2 transition-colors"
+              onClick={() => navigateTo('profile')}
+            >
               <img
                 src={MOCK_USERS.user1.avatar}
                 alt="Profile"

@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Users,
   CheckSquare,
+  Sword
 } from 'lucide-react';
 
 interface MobileNavProps {
@@ -14,12 +15,13 @@ const navigation = [
   { name: 'Dashboard', icon: LayoutDashboard, id: 'dashboard' },
   { name: 'People', icon: Users, id: 'people' },
   { name: 'Tasks', icon: CheckSquare, id: 'tasks' },
+  { name: 'Quests', icon: Sword, id: 'quests' },
 ];
 
 export default function MobileNav({ currentPage, onNavigate }: MobileNavProps) {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200">
-      <div className="grid grid-cols-3 h-16">
+      <div className="grid grid-cols-4 h-16">
         {navigation.map((item) => (
           <button
             key={item.name}

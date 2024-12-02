@@ -4,13 +4,20 @@ import Header from './components/Header';
 import TaskList from './components/tasks/TaskList';
 import Dashboard from './components/Dashboard';
 import PeopleChart from './components/people/PeopleChart';
+import QuestBoard from './components/quests/QuestBoard';
 import MobileNav from './components/MobileNav';
+import ProfilePage from './components/profile/ProfilePage';
+import GuildPage from './components/guild/GuildPage';
 import { CategoryProvider } from './contexts/CategoryContext';
+import { NavigationProvider } from './contexts/NavigationContext';
+import { NotificationProvider } from './contexts/NotificationContext';
+import { useNavigate } from './hooks/useNavigate';
+import { Task } from './types';
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState('dashboard');
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
   const [isSmallScreen, setIsSmallScreen] = useState(false);
+  const [tasks, setTasks] = useState<Task[]>([]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -26,16 +33,15 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const handleNavigate = (page: string) => {
-    setCurrentPage(page);
-  };
+  const AppContent = () => {
+    const { currentPage, navigateTo, profileId } = useNavigate();
+    
+    const handleQuestAccepted = (newTask: Task) => {
+      setTasks(prevTasks => [...prevTasks, newTask]);
+      navigateTo('tasks');
+    };
 
-  const toggleSidebar = () => {
-    setIsSidebarExpanded(!isSidebarExpanded);
-  };
-
-  return (
-    <CategoryProvider>
+    return (
       <div className="flex h-screen overflow-hidden bg-gray-100">
         {!isSmallScreen && (
           <aside className={`shrink-0 transition-all duration-300 ease-in-out ${
@@ -43,9 +49,9 @@ export default function App() {
           }`}>
             <Sidebar 
               currentPage={currentPage} 
-              onNavigate={handleNavigate} 
+              onNavigate={navigateTo}
               isExpanded={isSidebarExpanded}
-              onToggle={toggleSidebar}
+              onToggle={() => setIsSidebarExpanded(!isSidebarExpanded)}
               showToggle={!isSmallScreen}
             />
           </aside>
@@ -53,21 +59,34 @@ export default function App() {
 
         <div className="flex-1 flex flex-col min-w-0">
           <Header 
-            onToggleSidebar={toggleSidebar}
+            onToggleSidebar={() => setIsSidebarExpanded(!isSidebarExpanded)}
             isSidebarExpanded={isSidebarExpanded}
             showToggle={!isSmallScreen}
             isSmallScreen={isSmallScreen}
           />
           <main className={`flex-1 overflow-auto ${isSmallScreen ? 'pb-16' : ''}`}>
-            {currentPage === 'dashboard' && <Dashboard onNavigate={handleNavigate} />}
-            {currentPage === 'tasks' && <TaskList />}
+            {currentPage === 'dashboard' && <Dashboard onNavigate={navigateTo} />}
+            {currentPage === 'tasks' && <TaskList initialTasks={tasks} onTasksChange={setTasks} />}
             {currentPage === 'people' && <PeopleChart />}
+            {currentPage === 'quests' && <QuestBoard onQuestAccepted={handleQuestAccepted} />}
+            {currentPage === 'profile' && <ProfilePage profileId={profileId} />}
+            {currentPage === 'guild' && <GuildPage />}
           </main>
           {isSmallScreen && (
-            <MobileNav currentPage={currentPage} onNavigate={handleNavigate} />
+            <MobileNav currentPage={currentPage} onNavigate={navigateTo} />
           )}
         </div>
       </div>
-    </CategoryProvider>
+    );
+  };
+
+  return (
+    <NavigationProvider>
+      <NotificationProvider>
+        <CategoryProvider>
+          <AppContent />
+        </CategoryProvider>
+      </NotificationProvider>
+    </NavigationProvider>
   );
 }
