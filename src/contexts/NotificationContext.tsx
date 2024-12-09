@@ -1,52 +1,99 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
-import { Notification } from '../types/notification';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import axios from 'axios';
+import { useAuth } from './AuthContext';
+
+interface Notification {
+  id: number;
+  type: string;
+  title: string;
+  message: string;
+  read: boolean;
+  created_at: string;
+  task_id?: number;
+  quest_id?: number;
+  triggered_by_username?: string;
+  triggered_by_avatar?: string;
+}
 
 interface NotificationContextType {
   notifications: Notification[];
-  addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => void;
-  markAsRead: (notificationId: string) => void;
-  markAllAsRead: () => void;
-  clearNotification: (notificationId: string) => void;
   unreadCount: number;
+  loading: boolean;
+  error: string | null;
+  markAsRead: (notificationId: number) => Promise<void>;
+  markAllAsRead: () => Promise<void>;
+  clearNotification: (notificationId: number) => Promise<void>;
+  refreshNotifications: () => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const addNotification = useCallback((notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => {
-    const newNotification: Notification = {
-      ...notification,
-      id: `notification-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      timestamp: new Date().toISOString(),
-      read: false
-    };
+  const fetchNotifications = async () => {
+    try {
+      const response = await axios.get('/notifications');
+      setNotifications(response.data);
+      setError(null);
+    } catch (error: any) {
+      setError(error.response?.data?.message || 'Failed to fetch notifications');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    setNotifications(prev => [newNotification, ...prev]);
-  }, []);
+  useEffect(() => {
+    if (user) {
+      fetchNotifications();
+      // Poll for new notifications every minute
+      const interval = setInterval(fetchNotifications, 60000);
+      return () => clearInterval(interval);
+    } else {
+      setNotifications([]);
+      setLoading(false);
+    }
+  }, [user]);
 
-  const markAsRead = useCallback((notificationId: string) => {
-    setNotifications(prev =>
-      prev.map(notification =>
-        notification.id === notificationId
-          ? { ...notification, read: true }
-          : notification
-      )
-    );
-  }, []);
+  const markAsRead = async (notificationId: number) => {
+    try {
+      await axios.put(`/notifications/${notificationId}/read`);
+      setNotifications(prev =>
+        prev.map(notification =>
+          notification.id === notificationId
+            ? { ...notification, read: true }
+            : notification
+        )
+      );
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to mark notification as read');
+    }
+  };
 
-  const markAllAsRead = useCallback(() => {
-    setNotifications(prev =>
-      prev.map(notification => ({ ...notification, read: true }))
-    );
-  }, []);
+  const markAllAsRead = async () => {
+    try {
+      await axios.put('/notifications/read-all');
+      setNotifications(prev =>
+        prev.map(notification => ({ ...notification, read: true }))
+      );
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to mark all notifications as read');
+    }
+  };
 
-  const clearNotification = useCallback((notificationId: string) => {
-    setNotifications(prev =>
-      prev.filter(notification => notification.id !== notificationId)
-    );
-  }, []);
+  const clearNotification = async (notificationId: number) => {
+    try {
+      await axios.delete(`/notifications/${notificationId}`);
+      setNotifications(prev =>
+        prev.filter(notification => notification.id !== notificationId)
+      );
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to delete notification');
+    }
+  };
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -54,11 +101,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     <NotificationContext.Provider
       value={{
         notifications,
-        addNotification,
+        unreadCount,
+        loading,
+        error,
         markAsRead,
         markAllAsRead,
         clearNotification,
-        unreadCount
+        refreshNotifications: fetchNotifications
       }}
     >
       {children}
