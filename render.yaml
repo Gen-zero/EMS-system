@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: gen0-backend
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        value: https://fascinating-starlight-00bc89.netlify.app
+      - key: NODE_ENV
+        value: production
+    healthCheckPath: /health
